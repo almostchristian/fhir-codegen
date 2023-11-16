@@ -1,4 +1,5 @@
-﻿using System.Reflection;
+﻿using System.Numerics;
+using System.Reflection;
 using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.Health.Fhir.CodeGenCommon.Models;
@@ -13,25 +14,54 @@ namespace Microsoft.Health.Fhir.SourceGenerator;
 internal class Emitter
 {
     private delegate bool TryGetModel<TModel>(FhirVersionInfo versionInfo, string key, out TModel? model) where TModel : class;
-    private readonly ILanguage _language = new CSharpFirely2();
+    private readonly ILanguage _language;
     private readonly IFhirConverter _fhirConverter = new FromFhirExpando();
     private readonly FhirVersionInfo _fhirInfo = new FhirVersionInfo(FhirPackageCommon.FhirSequenceEnum.R4B);
-    private readonly ResourcePartialClass _resource;
     private readonly Action<Diagnostic> _report;
 
     public Emitter(
-        ResourcePartialClass resource,
+        FhirVersionInfo fhirInfo,
+        ILanguage language,
         Action<Diagnostic> report)
     {
-        _resource = resource;
         _report = report;
+        _fhirInfo = fhirInfo;
+        _language = language;
     }
 
-    public string? Emit()
+    public string? EmitSharedValueSets(string sharedNs, string[] sharedValueSets)
+    {
+        ProcessTerminologyArtifacts(sharedValueSets, _fhirInfo, (FhirVersionInfo m, string k, out object? v) => TryGetFhirTerminology(m, k, out v));
+
+        foreach (var item in _fhirInfo.ValueSetsByUrl)
+        {
+            var vs = item.Value;
+            foreach (var v in vs.ValueSetsByVersion)
+            {
+                v.Value.Resolve(_fhirInfo.CodeSystems);
+            }
+        }
+
+        _language.Namespace = sharedNs;
+        using var memoryStream = new MemoryStream();
+        _language.ExportSharedValueSets(_fhirInfo, memoryStream);
+        memoryStream.Position = 0;
+
+        if (memoryStream.Length == 0)
+        {
+            _report(Diagnostic.Create(DiagnosticDescriptors.FailedToGenerate, Location.None, "Shared"));
+            return null;
+        }
+
+        var code = Encoding.UTF8.GetString(memoryStream.ToArray());
+        return code;
+    }
+
+    public string? Emit(ResourcePartialClass resource)
     {
         try
         {
-            ProcessTerminologyArtifacts(_fhirInfo, (FhirVersionInfo m, string k, out object? v) => TryGetFhirTerminology(m, k, out v));
+            ProcessTerminologyArtifacts(resource.TerminologyResourcePaths, _fhirInfo, (FhirVersionInfo m, string k, out object? v) => TryGetFhirTerminology(m, k, out v));
 
             foreach (var item in _fhirInfo.ValueSetsByUrl)
             {
@@ -42,24 +72,7 @@ internal class Emitter
                 }
             }
 
-            return ProcessStructureDefinition(_fhirInfo);
-
-            static bool TryGetFhirTerminology(FhirVersionInfo m, string key, out object? value)
-            {
-                FhirValueSet? valueset = null;
-                FhirCodeSystem? codeSystem = null;
-                if (m.CodeSystems.TryGetValue(key, out codeSystem) ||
-                    m.TryGetValueSet(key, out valueset))
-                {
-                    value = (object)codeSystem ?? (object)valueset!;
-                    return true;
-                }
-                else
-                {
-                    value = null;
-                    return false;
-                }
-            }
+            return ProcessStructureDefinition(resource, _fhirInfo);
 
         }
         catch (ReflectionTypeLoadException rex)
@@ -74,12 +87,30 @@ internal class Emitter
         return null;
     }
 
+    private static bool TryGetFhirTerminology(FhirVersionInfo m, string key, out object? value)
+    {
+        FhirValueSet? valueset = null;
+        FhirCodeSystem? codeSystem = null;
+        if (m.CodeSystems.TryGetValue(key, out codeSystem) ||
+            m.TryGetValueSet(key, out valueset))
+        {
+            value = (object)codeSystem ?? (object)valueset!;
+            return true;
+        }
+        else
+        {
+            value = null;
+            return false;
+        }
+    }
+
     private void ProcessTerminologyArtifacts<TModel>(
+        string[] resourcePaths,
         FhirVersionInfo fhirInfo,
         TryGetModel<TModel> modelCollectionLocator)
         where TModel : class
     {
-        foreach (var path in _resource.TerminologyResourcePaths)
+        foreach (var path in resourcePaths)
         {
             if (path is null)
             {
@@ -98,31 +129,31 @@ internal class Emitter
     }
 
 
-    private string? ProcessStructureDefinition(FhirVersionInfo fhirInfo)
+    private string? ProcessStructureDefinition(ResourcePartialClass resource, FhirVersionInfo fhirInfo)
     {
-        var structureDef = _resource.StructureDefinitionPath;
+        var structureDef = resource.StructureDefinitionPath;
         var complex = ProcessFile(structureDef, fhirInfo, _fhirConverter, m => m.Resources, out var id, out var canonical, out var artifactClass);
         if (complex == null || artifactClass != FhirArtifactClassEnum.Resource)
         {
             _report(Diagnostic.Create(DiagnosticDescriptors.FailedArtifactDef, Location.None, structureDef, FhirArtifactClassEnum.Resource));
             return null;
         }
-        else if (complex.Name != _resource.Name)
+        else if (complex.Name != resource.Name)
         {
-            _report(Diagnostic.Create(DiagnosticDescriptors.ResourceNameMismatch, _resource.Location, complex.Name, _resource.Name));
+            _report(Diagnostic.Create(DiagnosticDescriptors.ResourceNameMismatch, resource.Location, complex.Name, resource.Name));
             return null;
         }
 
         _report(Diagnostic.Create(DiagnosticDescriptors.ProcessSuccess, Location.None, structureDef, canonical, artifactClass, fhirInfo.Resources.Count));
 
-        return GenerateFhirResourceSource(fhirInfo, complex, structureDef);
+        return GenerateFhirResourceSource(resource.Namespace, fhirInfo, complex, structureDef);
 
 
     }
 
-    private string? GenerateFhirResourceSource(FhirVersionInfo fhirInfo, FhirComplex complex, string originalFilePath)
+    private string? GenerateFhirResourceSource(string ns, FhirVersionInfo fhirInfo, FhirComplex complex, string originalFilePath)
     {
-        _language.Namespace = _resource.Namespace;
+        _language.Namespace = ns;
         using var memoryStream = new MemoryStream();
         _language.Export(fhirInfo, complex, memoryStream);
         memoryStream.Position = 0;

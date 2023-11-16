@@ -2,6 +2,7 @@
 //     Copyright (c) Microsoft Corporation. All rights reserved.
 //     Licensed under the MIT License (MIT). See LICENSE in the repo root for license information.
 // </copyright>
+using System;
 using System.IO;
 using System.Runtime.InteropServices.ComTypes;
 using Microsoft.Extensions.Options;
@@ -958,12 +959,76 @@ namespace Microsoft.Health.Fhir.SpecManager.Language
         /// <summary>Writes the shared enums.</summary>
         private void WriteSharedValueSets(GenSubset subset)
         {
-            HashSet<string> usedEnumNames = new HashSet<string>();
-
             string filename = Path.Combine(_exportDirectory, "Generated", "Template-Bindings.cs");
 
-            using (FileStream stream = new FileStream(filename, FileMode.Create))
-            using (ExportStreamWriter writer = new ExportStreamWriter(stream))
+            using FileStream stream = new FileStream(filename, FileMode.Create);
+
+            var predicate = (FhirValueSet vs) =>
+            {
+                return (subset.HasFlag(GenSubset.Satellite) && !(_baseSubsetValueSets.Contains(vs.URL) || _conformanceSubsetValueSets.Contains(vs.URL)))
+                || subset.HasFlag(GenSubset.Conformance) && _conformanceSubsetValueSets.Contains(vs.URL)
+                || subset.HasFlag(GenSubset.Base) && _baseSubsetValueSets.Contains(vs.URL);
+            };
+
+            var exclude = (FhirValueSet vs) =>
+            {
+                if (vs.ReferencedByComplexes.Count < 2 && !_explicitSharedValueSets.Contains((_info.FhirSequence.ToString(), vs.URL)))
+                {
+                    /* ValueSets that are used in a single POCO are generated as a nested enum inside that
+                     * POCO, not here in the shared valuesets */
+
+                    return true;
+                }
+
+                if (vs.StrongestBinding != FhirElement.ElementDefinitionBindingStrength.Required)
+                {
+                    /* Since required bindings cannot be extended, those are the only bindings that
+                       can be represented using enums in the POCO classes (using <c>Code&lt;T&gt;</c>). All other coded members
+                       use <c>Code</c>, <c>Coding</c> or <c>CodeableConcept</c>.
+                       Consequently, we only need to generate enums for valuesets that are used as
+                       required bindings anywhere in the datamodel. */
+                    return true;
+                }
+
+                if (_exclusionSet.Contains(vs.URL))
+                {
+                    return true;
+                }
+
+                return false;
+            };
+
+            ExportSharedValueSets(stream, predicate, exclude);
+        }
+
+        public void ExportSharedValueSets(FhirVersionInfo info, Stream outputStream)
+        {
+            var oldInfo = _info;
+            var oldOptions = _options;
+            _info = info;
+
+            _options ??= new ExporterOptions(
+                _languageName,
+                Array.Empty<string>(),
+                new List<ExporterOptions.FhirExportClassType>(),
+                ExporterOptions.ExtensionSupportLevel.All,
+                Array.Empty<string>(),
+                Array.Empty<string>(),
+                new Dictionary<string, string>(),
+                null,
+                false,
+                true,
+                null);
+            ExportSharedValueSets(outputStream, vs => true, vs => false);
+            _info = oldInfo;
+            _options = oldOptions;
+        }
+
+        private void ExportSharedValueSets(Stream outputStream, Func<FhirValueSet, bool> predicate, Func<FhirValueSet, bool> exclude)
+        {
+            HashSet<string> usedEnumNames = new HashSet<string>();
+
+            using (ExportStreamWriter writer = new ExportStreamWriter(outputStream, Encoding.UTF8, 1024, true))
             {
                 _writer = writer;
 
@@ -975,64 +1040,46 @@ namespace Microsoft.Health.Fhir.SpecManager.Language
                     // traverse value sets starting with highest version
                     foreach (FhirValueSet vs in collection.ValueSetsByVersion.Values.OrderByDescending(s => s.Version))
                     {
-                        if (vs.ReferencedByComplexes.Count < 2 && !_explicitSharedValueSets.Contains((_info.FhirSequence.ToString(), vs.URL)))
-                        {
-                            /* ValueSets that are used in a single POCO are generated as a nested enum inside that
-                             * POCO, not here in the shared valuesets */
-
-                            continue;
-                        }
-
-                        if (vs.StrongestBinding != FhirElement.ElementDefinitionBindingStrength.Required)
-                        {
-                            /* Since required bindings cannot be extended, those are the only bindings that
-                               can be represented using enums in the POCO classes (using <c>Code&lt;T&gt;</c>). All other coded members
-                               use <c>Code</c>, <c>Coding</c> or <c>CodeableConcept</c>.
-                               Consequently, we only need to generate enums for valuesets that are used as
-                               required bindings anywhere in the datamodel. */
-                            continue;
-                        }
-
-                        if (_exclusionSet.Contains(vs.URL))
+                        if (exclude(vs))
                         {
                             continue;
                         }
 
                         // If this is a shared valueset that will be generated in the base or conformance subset,
                         // don't also generate it here.
-                        bool writeValueSet =
-                            (subset.HasFlag(GenSubset.Satellite) && !(_baseSubsetValueSets.Contains(vs.URL) || _conformanceSubsetValueSets.Contains(vs.URL)))
-                            || subset.HasFlag(GenSubset.Conformance) && _conformanceSubsetValueSets.Contains(vs.URL)
-                            || subset.HasFlag(GenSubset.Base) && _baseSubsetValueSets.Contains(vs.URL);
+                        bool writeValueSet = predicate(vs);
 
                         WriteEnum(vs, string.Empty, usedEnumNames, silent: !writeValueSet);
 
-                        if (writeValueSet)
+                        if (_modelWriter != null)
                         {
-                            _modelWriter.WriteLineIndented($"// Generated Shared Enumeration: {_writtenValueSets[vs.URL].ValueSetName} ({vs.URL})");
-                        }
-                        else
-                        {
-                            _modelWriter.WriteLineIndented($"// Deferred generation of Shared Enumeration (will be generated in another subset): {_writtenValueSets[vs.URL].ValueSetName} ({vs.URL})");
-                        }
-
-                        _modelWriter.IncreaseIndent();
-
-                        foreach (string path in vs.ReferencingElementsByPath.Keys)
-                        {
-                            string name = path.Split('.')[0];
-
-                            if (_info.ComplexTypes.ContainsKey(name))
+                            if (writeValueSet)
                             {
-                                _modelWriter.WriteLineIndented($"// Used in model class (type): {path}");
-                                continue;
+                                _modelWriter.WriteLineIndented($"// Generated Shared Enumeration: {_writtenValueSets[vs.URL].ValueSetName} ({vs.URL})");
+                            }
+                            else
+                            {
+                                _modelWriter.WriteLineIndented($"// Deferred generation of Shared Enumeration (will be generated in another subset): {_writtenValueSets[vs.URL].ValueSetName} ({vs.URL})");
                             }
 
-                            _modelWriter.WriteLineIndented($"// Used in model class (resource): {path}");
-                        }
+                            _modelWriter.IncreaseIndent();
 
-                        _modelWriter.DecreaseIndent();
-                        _modelWriter.WriteLine(string.Empty);
+                            foreach (string path in vs.ReferencingElementsByPath.Keys)
+                            {
+                                string name = path.Split('.')[0];
+
+                                if (_info.ComplexTypes.ContainsKey(name))
+                                {
+                                    _modelWriter.WriteLineIndented($"// Used in model class (type): {path}");
+                                    continue;
+                                }
+
+                                _modelWriter.WriteLineIndented($"// Used in model class (resource): {path}");
+                            }
+
+                            _modelWriter.DecreaseIndent();
+                            _modelWriter.WriteLine(string.Empty);
+                        }
                     }
                 }
 
@@ -1950,6 +1997,7 @@ namespace Microsoft.Health.Fhir.SpecManager.Language
                 {
                     ClassName = className,
                     ValueSetName = nameSanitized,
+                    NamespaceName = _namespace,
                 });
         }
 
@@ -2029,11 +2077,12 @@ namespace Microsoft.Health.Fhir.SpecManager.Language
             {
                 string vsClass = _writtenValueSets[vs.URL].ClassName;
                 string vsName = _writtenValueSets[vs.URL].ValueSetName;
+                string vsNs = _writtenValueSets[vs.URL].NamespaceName;
 
                 if (string.IsNullOrEmpty(vsClass))
                 {
-                    codeLiteral = $"Code<{Namespace}.{vsName}>";
-                    enumClass = $"{Namespace}.{vsName}";
+                    codeLiteral = $"Code<{vsNs}.{vsName}>";
+                    enumClass = $"{vsNs}.{vsName}";
                 }
                 else
                 {
@@ -3024,6 +3073,7 @@ namespace Microsoft.Health.Fhir.SpecManager.Language
         {
             internal string ClassName;
             internal string ValueSetName;
+            internal string NamespaceName;
         }
 
         /// <summary>Information about the written element.</summary>

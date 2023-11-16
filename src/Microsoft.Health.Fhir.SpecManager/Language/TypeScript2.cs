@@ -1860,6 +1860,8 @@ public sealed class TypeScript2 : ILanguage
         _writer.WriteLineIndented(" */");
     }
 
+    public void ExportSharedValueSets(FhirVersionInfo info, Stream outputStream) => throw new NotImplementedException();
+
     /// <summary>Information about written codes.</summary>
     private struct WrittenCodeInfo
     {

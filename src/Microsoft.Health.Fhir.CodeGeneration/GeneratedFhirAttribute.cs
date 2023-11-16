@@ -22,4 +22,9 @@ public class GeneratedFhirAttribute : Attribute
     /// The relative paths to the terminology resource (CodeSystem/ValueSet) json files.
     /// </summary>
     public string[] TerminologyResources { get; set; } = Array.Empty<string>();
+
+    /// <summary>
+    /// The relative paths to the shared terminology resource (CodeSystem/ValueSet) json files.
+    /// </summary>
+    public string[] SharedTerminologyResources { get; set; } = Array.Empty<string>();
 }

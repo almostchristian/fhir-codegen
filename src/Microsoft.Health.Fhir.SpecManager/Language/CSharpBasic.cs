@@ -898,5 +898,7 @@ namespace Microsoft.Health.Fhir.SpecManager.Language
                 _writer.WriteLineIndented("/// </summary>");
             }
         }
+
+        public void ExportSharedValueSets(FhirVersionInfo info, Stream outputStream) => throw new NotImplementedException();
     }
 }

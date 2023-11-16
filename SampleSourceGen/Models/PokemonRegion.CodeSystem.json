@@ -1,0 +1,54 @@
+{
+    "resourceType": "CodeSystem",
+    "id": "pokemonregions",
+    "url": "http://pokemon.com/region",
+    "version": "1.0.0",
+    "name": "Pokemon Region",
+    "title": "Pokemon Region",
+    "status": "active",
+    "date": "2023-08-01",
+    "publisher": "The Pokemon Company",
+    "content": "complete",
+    "concept": [
+        {
+            "code": "kanto",
+            "display": "Kanto"
+        },
+        {
+            "code": "johto",
+            "display": "Johto"
+        },
+        {
+            "code": "hoenn",
+            "display": "Hoenn"
+        },
+        {
+            "code": "sinnoh",
+            "display": "Sinnoh"
+        },
+        {
+            "code": "hisui",
+            "display": "Hisui"
+        },
+        {
+            "code": "unova",
+            "display": "Unova"
+        },
+        {
+            "code": "kalos",
+            "display": "Kalos"
+        },
+        {
+            "code": "alola",
+            "display": "Alola"
+        },
+        {
+            "code": "galar",
+            "display": "Galar"
+        },
+        {
+            "code": "paldea",
+            "display": "Paldea"
+        }
+    ]
+}

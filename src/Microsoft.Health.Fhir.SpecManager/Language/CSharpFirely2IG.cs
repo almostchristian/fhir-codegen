@@ -3523,6 +3523,8 @@ namespace Microsoft.Health.Fhir.SpecManager.Language
             }
         }
 
+        public void ExportSharedValueSets(FhirVersionInfo info, Stream outputStream) => throw new NotImplementedException();
+
         /// <summary>Information about a written value set.</summary>
         private struct WrittenValueSetInfo
         {

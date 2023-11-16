@@ -3,8 +3,9 @@
 namespace SampleSourceGen.Models;
 
 [GeneratedFhir(
-    "Models/Pokemon.StructureDefinition.json",
+    "Models/PokemonGym.StructureDefinition.json",
+    TerminologyResources = new[] { "Models/PokemonRegion.CodeSystem.json", "Models/PokemonRegion.ValueSet.json" },
     SharedTerminologyResources = new[] { "Models/PokemonType.CodeSystem.json", "Models/PokemonType.ValueSet.json" })]
-public partial class Pokemon
+public partial class PokemonGym
 {
 }

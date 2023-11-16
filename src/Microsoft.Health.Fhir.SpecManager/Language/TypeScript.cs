@@ -876,6 +876,8 @@ namespace Microsoft.Health.Fhir.SpecManager.Language
             _writer.WriteLineIndented($" */");
         }
 
+        public void ExportSharedValueSets(FhirVersionInfo info, Stream outputStream) => throw new NotImplementedException();
+
         /// <summary>Information about written codes.</summary>
         private struct WrittenCodeInfo
         {

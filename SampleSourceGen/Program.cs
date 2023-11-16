@@ -17,5 +17,13 @@ var pkmn = new SampleSourceGen.Models.Pokemon
 {
     Name = "Charmander",
     NationalDexNo = 4,
-    PrimaryType = SampleSourceGen.Models.Pokemon.PokemonTypes.Fire,
+    PrimaryType = SampleSourceGen.Models.PokemonTypes.Fire,
 };
+
+var pkmngym = new SampleSourceGen.Models.PokemonGym
+{
+    Name = "Viridian City Gym",
+    Region = SampleSourceGen.Models.PokemonGym.PokemonRegion.Kanto,
+    PokemonType = SampleSourceGen.Models.PokemonTypes.Ground,
+};
+

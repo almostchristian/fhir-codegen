@@ -442,6 +442,8 @@ namespace Microsoft.Health.Fhir.SpecManager.Language
             }
         }
 
+        public void ExportSharedValueSets(FhirVersionInfo info, Stream outputStream) => throw new NotImplementedException();
+
         /// <summary>A cyto element.</summary>
         private class CytoElement
         {

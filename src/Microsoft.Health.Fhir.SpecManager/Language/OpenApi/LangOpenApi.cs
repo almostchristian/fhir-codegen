@@ -340,4 +340,6 @@ public class LangOpenApi : ILanguage
         doc.Serialize(writer, openApiOptions.OpenApiVersion);
 
     }
+
+    public void ExportSharedValueSets(FhirVersionInfo info, Stream outputStream) => throw new NotImplementedException();
 }

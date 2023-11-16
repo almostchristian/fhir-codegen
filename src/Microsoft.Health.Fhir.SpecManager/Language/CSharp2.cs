@@ -2646,5 +2646,7 @@ namespace Microsoft.Health.Fhir.SpecManager.Language
                 _writer.WriteLine(line);
             }
         }
+
+        public void ExportSharedValueSets(FhirVersionInfo info, Stream outputStream) => throw new NotImplementedException();
     }
 }

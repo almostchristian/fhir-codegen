@@ -2411,4 +2411,6 @@ public sealed class TypeScriptSdk : ILanguage
 
         sb.WriteLine($"// Minimum TypeScript Version: {_minimumTypeScriptVersion}");
     }
+
+    public void ExportSharedValueSets(FhirVersionInfo info, Stream outputStream) => throw new NotImplementedException();
 }

@@ -58,6 +58,7 @@ internal class Parser
 
                 string? structureDefPath = null;
                 string[] terminologies = Array.Empty<string>();
+                string[] sharedterminologies = Array.Empty<string>();
                 Location? location = null;
 
                 foreach (AttributeListSyntax mal in classDec.AttributeLists)
@@ -141,6 +142,16 @@ internal class Parser
                                                 }
 
                                                 break;
+                                            case "SharedTerminologyResources":
+                                                var svalues = (ImmutableArray<TypedConstant>)GetItem(value)!;
+                                                var stestValues = svalues.Select(x => x.Value?.ToString()).Where(x => !string.IsNullOrEmpty(x)).ToArray()!;
+                                                sharedterminologies = new string[stestValues.Length];
+                                                for (int i = 0; i < stestValues.Length; i++)
+                                                {
+                                                    sharedterminologies[i] = ResolvePath(stestValues[i])!;
+                                                }
+
+                                                break;
                                         }
                                     }
                                 }
@@ -214,7 +225,7 @@ internal class Parser
                         }
                     }
 
-                    result.Add(new ResourcePartialClass(location, nspace, classDecSymbol.Name, structureDefPath, terminologies));
+                    result.Add(new ResourcePartialClass(location, nspace, classDecSymbol.Name, structureDefPath, terminologies, sharedterminologies));
                 }
             }
         }

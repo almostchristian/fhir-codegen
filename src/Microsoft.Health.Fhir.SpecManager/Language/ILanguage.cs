@@ -59,4 +59,8 @@ public interface ILanguage
         FhirVersionInfo info,
         FhirComplex complex,
         Stream outputStream);
+
+    void ExportSharedValueSets(
+        FhirVersionInfo info,
+        Stream outputStream);
 }
